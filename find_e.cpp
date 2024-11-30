@@ -40,15 +40,10 @@ static const double E24[] = {1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2
 * Example: 0.00456 -> 4.56	12300 -> 1.23
 */
 double cutDown(double d) {
-	if (d < 1.0) {
-		while (d < 1.0) {
-			d *= 10;
-		}
-	} else {
-		while (d > 10.0) {
-			d /= 10;
-		}
-	}
+	if (d < 1.0)
+		while (d < 1.0) d *= 10;
+	else
+		while (d > 10.0) d /= 10;
 	return d;
 }
 
@@ -87,8 +82,8 @@ int findEseries(vector<double>& values, double maxError, double* largestError, m
 			goto fix_series;
 
 		fix_series:
-			for (size_t i = 0; i < values.size(); i++) {
-				double v = cutDown(values[i]);
+			for (const auto value : values) {
+				double v = cutDown(value);
 				double smallestError = -1.0;
 				for (uint16_t m = 0; m < n; m++) {
 					double ve = ser[m];
@@ -107,8 +102,8 @@ int findEseries(vector<double>& values, double maxError, double* largestError, m
 
 		default:
 			double r10 = pow(10, 1.0 / n);
-			for (size_t i = 0; i < values.size(); i++) {
-				double v = cutDown(values[i]);
+			for (const auto value : values) {
+				double v = cutDown(value);
 				uint16_t m = round(log(v) / log(r10));
 				double ve = round(pow(r10, m) * 1000.0) / 1000.0;
 				double err = abs(ve - v) / v;
