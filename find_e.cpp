@@ -2,7 +2,7 @@
 * This is a simple tool for finding a matching E-series for provided resistor values (or other component values utilizing the E-series)
 * Simply provide the required values as list to the executable when calling it in the terminal, plus -err followed by the required max. error (in percent)
 * 
-* Copyright 2024 M_Marvin
+* Copyright 2024 M_Marvin (Discord, GitHub)
 * 
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,71 @@ double cutDown(double d) {
 	else
 		while (d > 10.0) d /= 10;
 	return d;
+}
+
+/*
+* Tries to find the first E-series, from which values the requested ratio can be made, while stayng below the requested maximal error.
+* @param ratio The ratio of the two values
+* @param maxError The maximum error that is acceptable
+* @param error The actual error with the found values
+* @param value1 The first value from the found series
+* @param value2 The second value from the found series
+* @returns The series from which the values where taken
+*/
+int findEseriesForRatio(double ratio, double maxError, double* error, double* value1, double* value2) {
+	
+	if (maxError <= 0.0) return 0;
+	
+	double r = cutDown(ratio);
+	for (uint16_t n = 3; (uint32_t) n * 2 < 0xFFFF; n *= 2) {
+		
+		for (uint16_t e1 = 1; e1 <= n; e1++) {
+			for (uint16_t e2 = 1; e2 <= e1; e2++) {
+				
+				const double* ser;
+				switch (n) {
+					case 3:
+						ser = E3;
+						goto fix_series;
+					case 6:
+						ser = E6;
+						goto fix_series;
+					case 12:
+						ser = E12;
+						goto fix_series;
+					case 24:
+						ser = E24;
+						goto fix_series;
+
+					fix_series:
+						*value1 = ser[e1];
+						*value2 = ser[e2];
+						break;
+						
+					default:
+						double r10 = pow(10, 1.0 / n);
+						*value1 = round(pow(r10, e1) * 1000.0) / 1000.0;
+						*value2 = round(pow(r10, e2) * 1000.0) / 1000.0;
+						break;
+				}
+				
+				double rat = *value1 / *value2;
+				double err = abs(rat - r) / r;
+				
+				if (err <= maxError) {
+					*error = err;
+					while (*value1 / *value2 < ratio) *value1 *= 10;
+					while (*value1 / *value2 > ratio) *value2 *= 10;
+					return n;
+				}
+				
+			}
+		}
+		
+	}
+	
+	return 0;
+	
 }
 
 /*
@@ -129,6 +194,49 @@ int findEseries(vector<double>& values, double maxError, double* largestError, m
 
 }
 
+void findBestForRatio(double ratio, double maxError) {
+
+	wprintf(L"╔═══════════════════════════════════════╗\n");
+	wprintf(L"║                                       ║\n");
+	wprintf(L"  \033[1Arequested max. error: \033[38;5;190m%.2lf %%\033[0m\n", maxError * 100.0);
+	wprintf(L"╟───────────────────────────────────────╢\n");
+	wprintf(L"║                                       ║\n");
+	wprintf(L"  \033[1Atrying to find best E-series\n");
+	wprintf(L"╚═══════════════════════════════════════╝\n");
+
+	double error = 0.0;
+	double value1 = 0.0;
+	double value2 = 0.0;
+	uint16_t series = findEseriesForRatio(ratio, maxError, &error, &value1, &value2);
+
+	if (series == 0) {
+
+		wprintf(L"╔═══════════════════════════════════════╗\n");
+		wprintf(L"║                                       ║\n");
+		wprintf(L"  \033[1A\033[38;5;196m[!] unabele to satisfy conditions\033[0m\n");
+		wprintf(L"╚═══════════════════════════════════════╝\n");
+
+		return;
+
+	}
+
+	wprintf(L"╔═══════════════════════════════════════╗\n");
+	wprintf(L"║                                       ║\n");
+	wprintf(L"  \033[1Abest series: \033[38;5;76mE%u\033[0m\n", series);
+	wprintf(L"║                                       ║\n");
+	wprintf(L"  \033[1Aerror: \033[38;5;190m%.2lf %%\033[0m\n", error * 100.0);
+	wprintf(L"╟───────────────────────────────────────╢\n");
+	wprintf(L"║ R_1        ┆ R_2        ┆ ratio       ║\n");
+
+	wprintf(L"║            ┆            ┆             ║\n");
+	wprintf(L"  \033[1A \033[38;5;76m%.3lf\033[0m\n", value1);
+	wprintf(L"               \033[1A \033[38;5;76m%.3lf\033[0m\n", value2);
+	wprintf(L"                            \033[1A \033[38;5;190m%.2lf\033[0m\n", value1 / value2);
+
+	wprintf(L"╚═══════════════════════════════════════╝\n");
+
+}
+
 void findBestForValues(vector<double>& values, double maxError) {
 
 	wprintf(L"╔═══════════════════════════════════════╗\n");
@@ -186,10 +294,11 @@ int main(int argn, const char** argv) {
 	wprintf(L"║                                       ║\n");
 	wprintf(L"  \033[1A\033[38;5;214mfind E tool by M_Marvin\033[0m\n");
 	wprintf(L"╚═══════════════════════════════════════╝\n");
-
+	
 	// Read in max error and resistor values
 	double maxError = 0.01;
 	vector<double> values = vector<double>();
+	bool ratioMode = false;
 	
 	for (int i = 1; i < argn; i++) {
 		string s = string(argv[i]);
@@ -197,15 +306,21 @@ int main(int argn, const char** argv) {
 		if (s == "-err") {
 			if (argn <= i + 1) return -1;
 			maxError = stod(string(argv[i + 1])) / 100.0;
-		}
-		else {
+		} else if (s == "-ratio") {
+			ratioMode = true;
+		} else {
 			values.push_back(stod(string(argv[i])));
 		}
 	}
 	
 	// Run actual algorithm to find best values
-	findBestForValues(values, maxError);
-
+	if (ratioMode) {
+		if (values.size() == 0) return -1;
+		findBestForRatio(values[0], maxError);
+	} else {
+		findBestForValues(values, maxError);
+	}
+	
 	return 0;
 	
 }
