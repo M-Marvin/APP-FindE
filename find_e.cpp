@@ -299,6 +299,7 @@ int main(int argn, const char** argv) {
 	double maxError = 0.01;
 	vector<double> values = vector<double>();
 	bool ratioMode = false;
+	bool parseValues = true;
 	
 	for (int i = 1; i < argn; i++) {
 		string s = string(argv[i]);
@@ -306,9 +307,11 @@ int main(int argn, const char** argv) {
 		if (s == "-err") {
 			if (argn <= i + 1) return -1;
 			maxError = stod(string(argv[i + 1])) / 100.0;
+			parseValues = false;
 		} else if (s == "-ratio") {
 			ratioMode = true;
-		} else {
+			parseValues = false;
+		} else if (parseValues) {
 			values.push_back(stod(string(argv[i])));
 		}
 	}
